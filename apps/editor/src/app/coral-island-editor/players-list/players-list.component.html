@@ -1,0 +1,44 @@
+<div class="p-2">
+  <div class="mb-4">
+    <button 
+      class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded"
+      (click)="clearAllPlayers($event)"
+      [disabled]="!players() || players().length === 0"
+    >
+      Clear All Players
+    </button>
+  </div>
+
+  <ul>
+    @for (player of players(); track player) { @let playerPath = PLAYERS_ARRAY_PATH + '.' + $index + '.Struct' ; @let
+    playerInfo = playerPath + '.playerInfo_0.Struct.value.Struct' ;
+
+    <li class="mb-2">
+      <div class="rounded-3xl bg-beige font-bold group relative">
+        <a
+          class="block p-4"
+          [routerLink]="['player', $index]"
+          routerLinkActive="active !bg-active text-active-dark"
+        >
+          <div class="flex justify-between items-center text-lg">
+            <div class="text-muted group-[.active]:text-active-dark">
+              {{ playerInfo + '.farmName_0.Str' | saveGameValue }}
+            </div>
+            <ci-ui-money [amount]="playerPath + '.playerCurrentGold_0.Int' | saveGameValue" />
+          </div>
+          <div class="text-primary-dark text-xl group-[.active]:text-active-dark">
+            {{ playerInfo + '.Name_0.Str' | saveGameValue }}
+          </div>
+        </a>
+        <button 
+          class="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-2 rounded"
+          (click)="removePlayer($index, $event)"
+          title="Remove this player"
+        >
+          ✕
+        </button>
+      </div>
+    </li>
+    }
+  </ul>
+</div>
