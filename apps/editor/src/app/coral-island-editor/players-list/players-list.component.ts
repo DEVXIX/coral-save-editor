@@ -5,11 +5,12 @@ import { SaveGameValuePipe } from '../../core/save-game/save-game-value.pipe';
 import { MoneyComponent } from '@coral-island/ui';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-players-list',
   standalone: true,
-  imports: [PrimitiveFormPartComponent, SaveGameValuePipe, MoneyComponent, RouterLink, RouterLinkActive, CommonModule],
+  imports: [PrimitiveFormPartComponent, SaveGameValuePipe, MoneyComponent, RouterLink, RouterLinkActive, CommonModule, FormsModule],
   templateUrl: './players-list.component.html',
 })
 export class PlayersListComponent {
@@ -20,6 +21,8 @@ export class PlayersListComponent {
   
   showPlayerData: { [index: number]: boolean } = {};
   viewingPlayerData: { [index: number]: unknown } = {};
+  editingSteamId: { [index: number]: boolean } = {};
+  steamIdInputs: { [index: number]: string } = {};
 
   removePlayer(index: number, event: Event) {
     event.preventDefault();
@@ -172,6 +175,71 @@ export class PlayersListComponent {
     };
     
     input.click();
+  }
+
+  movePlayerUp(index: number, event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    if (index > 0) {
+      if (confirm(`Move ${this.getPlayerName(index) || `Player ${index}`} up in the list?`)) {
+        this.#saveGameService.movePlayer(index, index - 1);
+      }
+    }
+  }
+
+  movePlayerDown(index: number, event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const players = this.players();
+    if (index < players.length - 1) {
+      if (confirm(`Move ${this.getPlayerName(index) || `Player ${index}`} down in the list?`)) {
+        this.#saveGameService.movePlayer(index, index + 1);
+      }
+    }
+  }
+
+  editSteamId(index: number, event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Get current Steam ID
+    const currentSteamId = this.#saveGameService.getPlayerSteamId(index);
+    if (currentSteamId) {
+      this.steamIdInputs[index] = currentSteamId;
+      this.editingSteamId[index] = true;
+    }
+  }
+
+  updateSteamId(index: number, event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const newSteamId = this.steamIdInputs[index];
+    if (newSteamId && newSteamId.trim()) {
+      if (confirm(`Are you sure you want to update the Steam ID for ${this.getPlayerName(index) || `Player ${index}`}?`)) {
+        const success = this.#saveGameService.updatePlayerSteamId(index, newSteamId.trim());
+        if (success) {
+          this.editingSteamId[index] = false;
+          alert('Steam ID updated successfully!');
+        } else {
+          alert('Failed to update Steam ID. Please try again.');
+        }
+      }
+    }
+  }
+
+  cancelSteamIdEdit(index: number, event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    this.editingSteamId[index] = false;
+    delete this.steamIdInputs[index];
+  }
+
+  getSteamId(index: number): string {
+    return this.#saveGameService.getPlayerSteamId(index) || 'N/A';
   }
 
   private getPlayerName(index: number): string | null {

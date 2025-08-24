@@ -153,9 +153,39 @@ export class SaveGameService {
     }
   }
 
-  removePlayer(playerIndex: number) {
+  movePlayer(fromIndex: number, toIndex: number): boolean {
     const data = this.decodedData();
-    if (!data) return;
+    if (!data) return false;
+    
+    // Handle path normalization for different save formats
+    let playersPath = 'root.properties.SaveData_0.Struct.value.Struct.players_0.Array.value.Struct.value';
+    if (data['root']?.['properties']?.['saveData_0'] && !data['root']?.['properties']?.['SaveData_0']) {
+      playersPath = 'root.properties.saveData_0.Struct.value.Struct.players_0.Array.value.Struct.value';
+    }
+    
+    const players = this.get(playersPath)();
+    
+    if (players && Array.isArray(players) && 
+        fromIndex >= 0 && fromIndex < players.length &&
+        toIndex >= 0 && toIndex < players.length &&
+        fromIndex !== toIndex) {
+      
+      // Swap the players
+      const temp = players[fromIndex];
+      players[fromIndex] = players[toIndex];
+      players[toIndex] = temp;
+      
+      // Update the reactive signal
+      this.decodedData.set({ ...this.decodedData() });
+      return true;
+    }
+    
+    return false;
+  }
+
+  removePlayer(playerIndex: number): boolean {
+    const data = this.decodedData();
+    if (!data) return false;
     
     // Handle path normalization for different save formats
     let playersPath = 'root.properties.SaveData_0.Struct.value.Struct.players_0.Array.value.Struct.value';
@@ -171,8 +201,10 @@ export class SaveGameService {
       
       // Update the decodedData signal to trigger reactivity
       this.decodedData.set({ ...this.decodedData() });
+      return true;
     } else {
       console.warn(`Cannot remove player at index ${playerIndex}: invalid index or no players array`);
+      return false;
     }
   }
 
@@ -204,15 +236,15 @@ export class SaveGameService {
     if (!data) return null;
     
     // Handle path normalization for different save formats
-    let playersPath = 'root.properties.SaveData_0.Struct.value.Struct.players_0.Array.value.Struct.value';
-    if (data['root']?.['properties']?.['saveData_0'] && !data['root']?.['properties']?.['SaveData_0']) {
-      playersPath = 'root.properties.saveData_0.Struct.value.Struct.players_0.Array.value.Struct.value';
-    }
+    const saveDataKey = data['root']?.['properties']?.['saveData_0'] ? 'saveData_0' : 'SaveData_0';
+    const playersPath = `root.properties.${saveDataKey}.Struct.value.Struct.players_0.Array.value.Struct.value`;
     
     const players = this.get(playersPath)();
     
     if (players && Array.isArray(players) && playerIndex >= 0 && playerIndex < players.length) {
-      return JSON.parse(JSON.stringify(players[playerIndex])); // Deep clone
+      // Return the COMPLETE player data - this contains everything!
+      // The player object already contains all their progression, items, world data, etc.
+      return JSON.parse(JSON.stringify(players[playerIndex]));
     }
     
     return null;
@@ -242,21 +274,19 @@ export class SaveGameService {
     if (!data) return false;
     
     // Handle path normalization for different save formats
-    let playersPath = 'root.properties.SaveData_0.Struct.value.Struct.players_0.Array.value.Struct.value';
-    if (data['root']?.['properties']?.['saveData_0'] && !data['root']?.['properties']?.['SaveData_0']) {
-      playersPath = 'root.properties.saveData_0.Struct.value.Struct.players_0.Array.value.Struct.value';
-    }
+    const saveDataKey = data['root']?.['properties']?.['saveData_0'] ? 'saveData_0' : 'SaveData_0';
+    const playersPath = `root.properties.${saveDataKey}.Struct.value.Struct.players_0.Array.value.Struct.value`;
     
     const players = this.get(playersPath)();
     
     if (players && Array.isArray(players)) {
       if (typeof playerIndex === 'number' && playerIndex >= 0 && playerIndex < players.length) {
-        // Replace existing player
-        players[playerIndex] = playerData;
-        console.log(`Imported player data at index ${playerIndex}`);
+        // Replace existing player COMPLETELY with all their data
+        players[playerIndex] = JSON.parse(JSON.stringify(playerData));
+        console.log(`Completely replaced player at index ${playerIndex} with imported data`);
       } else {
         // Add as new player
-        players.push(playerData);
+        players.push(JSON.parse(JSON.stringify(playerData)));
         console.log('Added new player from imported data');
       }
       
@@ -292,6 +322,71 @@ export class SaveGameService {
     }
     
     return false;
+  }
+
+  updatePlayerSteamId(playerIndex: number, newSteamId: string): boolean {
+    const data = this.decodedData();
+    if (!data) return false;
+    
+    // Handle path normalization for different save formats
+    const saveDataKey = data['root']?.['properties']?.['saveData_0'] ? 'saveData_0' : 'SaveData_0';
+    const playersPath = `root.properties.${saveDataKey}.Struct.value.Struct.players_0.Array.value.Struct.value`;
+    
+    const players = this.get(playersPath)();
+    
+    if (players && Array.isArray(players) && playerIndex >= 0 && playerIndex < players.length) {
+      const player = players[playerIndex];
+      
+      // Update the Steam ID in the creatorUniqueId field
+      if (player?.['Struct']?.['creatorUniqueId_0']?.['Struct']?.['value']?.['UniqueNetIdRepl']?.['inner']) {
+        const inner = player['Struct']['creatorUniqueId_0']['Struct']['value']['UniqueNetIdRepl']['inner'];
+        
+        // Extract the current format and replace just the Steam ID part
+        const currentContents = inner['contents'] || '';
+        
+        // Steam ID format is usually: "STEAMID_+_|UNIQUEPART"
+        // We want to replace just the STEAMID part
+        const parts = currentContents.split('_+_|');
+        if (parts.length === 2) {
+          // Keep the unique part, replace Steam ID
+          inner['contents'] = `${newSteamId}_+_|${parts[1]}`;
+        } else {
+          // Fallback: replace entire contents
+          inner['contents'] = newSteamId;
+        }
+        
+        console.log(`Updated player ${playerIndex} Steam ID to: ${newSteamId}`);
+        
+        // Update the decodedData signal to trigger reactivity
+        this.decodedData.set({ ...this.decodedData() });
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  getPlayerSteamId(playerIndex: number): string | null {
+    const data = this.decodedData();
+    if (!data) return null;
+    
+    // Handle path normalization for different save formats
+    const saveDataKey = data['root']?.['properties']?.['saveData_0'] ? 'saveData_0' : 'SaveData_0';
+    const playersPath = `root.properties.${saveDataKey}.Struct.value.Struct.players_0.Array.value.Struct.value`;
+    
+    const players = this.get(playersPath)();
+    
+    if (players && Array.isArray(players) && playerIndex >= 0 && playerIndex < players.length) {
+      const player = players[playerIndex];
+      
+      // Get the Steam ID from the creatorUniqueId field
+      const steamIdData = player?.['Struct']?.['creatorUniqueId_0']?.['Struct']?.['value']?.['UniqueNetIdRepl']?.['inner'];
+      if (steamIdData) {
+        return steamIdData['contents'] || null;
+      }
+    }
+    
+    return null;
   }
 
   #downloadURL(url: string, fileName: string) {
