@@ -8,4 +8,6 @@ Changing Steam ID to the new person that's joining would keep the previous progr
 # Running the Editor
 
 - yarn install the packages
+- npm run build-demo
+- nx run save_parser:build-wasm
 - npx nx serve editor 
